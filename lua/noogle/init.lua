@@ -1,58 +1,64 @@
 local M = {}
 
---- Get path on filesystem to executable in users PATH
---- @return string?
---- @param name string
-local function which(name)
-	local path = vim.fn.system 'which ' .. name
+local function cmd_with_output(cmd)
+	local output = vim.fn.system(cmd)
 	if vim.v.shell_error == 0 then
-		return path
+		return output
 	else
 		return nil
 	end
 end
 
 ---@diagnostic disable-next-line: undefined-global
-local nix_store_bin_path = nix_store_bin_path or nil
+local bin_path = nix_store_bin_path or cmd_with_output 'which noogle'
 
 local function health()
 	local checks = {}
 
-	if not nix_store_bin_path then
+	if not bin_path then
 		table.insert(checks, {
 			ok = false,
-			message = 'plugin was built without nix, expecting noogle to be available in PATH',
+			message = 'noogle not found in path',
 		})
-
-		local path = which 'noogle'
-		if not path then
-			table.insert(checks, {
-				ok = false,
-				message = 'noogle not found in path',
-			})
-		else
-			table.insert(checks, {
-				ok = true,
-				message = 'noogle found at: ' .. path,
-			})
-		end
 	else
+		print(bin_path .. ' --version')
+		local version = vim.trim(cmd_with_output(bin_path .. ' --version'))
 		table.insert(checks, {
 			ok = true,
-			message = 'noogle found at: ' .. nix_store_bin_path,
+			message = 'noogle version ' .. version .. ' found at: ' .. bin_path,
 		})
 	end
 
 	return checks
 end
 
--- check if binary path has been patched in as part of the build process
--- if not we just fall back on whatever can be found in our PATH
-local bin_path = nix_store_bin_path or which 'noogle'
+local function get_function_data(function_name)
+	local raw_json = vim.fn.system(bin_path .. ' show --json "' .. function_name .. '"')
+	local ok, deserialized = pcall(vim.json.decode, raw_json, {})
+	if not ok then
+		return nil
+	end
+	return deserialized
+end
+
+---@param json table
+---@return GoDocDefinition?
+local function extract_definition(json)
+	if not json.meta or not json.meta.lambda_position then
+		return nil
+	end
+
+	local pos = json.meta.lambda_position
+	return {
+		filepath = pos.file,
+		position = { pos.line, pos.column },
+	}
+end
 
 function M.setup()
 	return {
 		command = 'Noogle',
+		health = health,
 		get_items = function()
 			return vim.fn.systemlist(bin_path .. ' list')
 		end,
@@ -60,12 +66,16 @@ function M.setup()
 			return vim.fn.systemlist(bin_path .. ' doc ' .. choice)
 		end,
 		get_syntax_info = function()
-			return {
-				filetype = 'markdown', -- filetype for buffer that is opened
-				language = 'markdown', -- tree-sitter parser
-			}
+			return { filetype = 'markdown', language = 'markdown' }
 		end,
-		health = health,
+		get_definition = function(choice)
+			local json = get_function_data(choice)
+			if not json then
+				vim.notify('No data found for ' .. choice)
+				return
+			end
+			return extract_definition(json)
+		end,
 	}
 end
 
