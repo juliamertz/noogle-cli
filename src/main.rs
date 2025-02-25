@@ -9,8 +9,12 @@ use std::io::{BufRead, Write};
 #[derive(FromArgs, PartialEq, Debug)]
 /// Nix function exploring
 struct Cli {
+    /// print out version and quit
+    #[argh(switch)]
+    version: bool,
+
     #[argh(subcommand)]
-    command: Command,
+    command: Option<Command>,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -71,8 +75,17 @@ const RAW_JSON: &str = include_str!("../data.json");
 fn main() -> Result<()> {
     let cli: Cli = argh::from_env();
 
+    if cli.version {
+        println!("v{}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+
+    let Some(subcommand) = cli.command else {
+        anyhow::bail!("No subcommand given");
+    };
+
     let docs: Docs = serde_json::from_str(RAW_JSON).unwrap();
-    let result = match &cli.command {
+    let result = match subcommand {
         Command::List(args) => handle_list_command(args, docs)?,
         Command::Search(args) => handle_search_command(args, docs),
         Command::Show(args) => handle_show_command(args, docs)?,
@@ -96,7 +109,7 @@ fn string_or_stdin(string: Option<String>) -> Result<String> {
     }
 }
 
-fn handle_list_command(args: &ListCommand, docs: Docs) -> Result<String> {
+fn handle_list_command(args: ListCommand, docs: Docs) -> Result<String> {
     let stdout = if args.json {
         serde_json::to_string_pretty(&docs)?
     } else {
@@ -110,7 +123,7 @@ fn handle_list_command(args: &ListCommand, docs: Docs) -> Result<String> {
     Ok(stdout)
 }
 
-fn handle_search_command(args: &SearchCommand, docs: Docs) -> String {
+fn handle_search_command(args: SearchCommand, docs: Docs) -> String {
     let mut matches = docs
         .iter()
         .filter_map(|entry| {
@@ -135,8 +148,8 @@ fn handle_search_command(args: &SearchCommand, docs: Docs) -> String {
     stdout
 }
 
-fn handle_show_command(args: &ShowCommand, docs: Docs) -> Result<String> {
-    let title = string_or_stdin(args.path.clone())?;
+fn handle_show_command(args: ShowCommand, docs: Docs) -> Result<String> {
+    let title = string_or_stdin(args.path)?;
     let entry = docs.get_by_title(title).context("no such function")?;
 
     if args.json {
@@ -146,8 +159,8 @@ fn handle_show_command(args: &ShowCommand, docs: Docs) -> Result<String> {
     }
 }
 
-fn handle_doc_command(args: &DocCommand, docs: Docs) -> Result<String> {
-    let title = string_or_stdin(args.path.clone())?;
+fn handle_doc_command(args: DocCommand, docs: Docs) -> Result<String> {
+    let title = string_or_stdin(args.path)?;
     docs.get_by_title(title)
         .context("no such function")?
         .content
