@@ -1,11 +1,29 @@
+use std::ops::{Deref, DerefMut};
+
 use serde::{Deserialize, Serialize};
 
 pub type ValuePath = Vec<String>;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum PositionType {
-    Lambda,
-    Attribute,
+pub struct Docs(pub Vec<Doc>);
+
+impl Deref for Docs {
+    type Target = Vec<Doc>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Docs {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl Docs {
+    pub fn get_by_title(&self, title: impl AsRef<str>) -> Option<&Doc> {
+        self.iter().find(|e| e.meta.title == title.as_ref())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -14,32 +32,38 @@ pub struct Doc {
     pub content: Option<ContentSource>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentSource {
-    content: Option<String>,
-    source: Option<SourceOrigin>,
+    pub content: Option<String>,
+    pub source: Option<SourceOrigin>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PositionType {
+    Lambda,
+    Attribute,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SourceOrigin {
-    position: Option<FilePosition>,
-    path: Option<ValuePath>,
-    pos_type: Option<PositionType>,
+    pub position: Option<FilePosition>,
+    pub path: Option<ValuePath>,
+    pub pos_type: Option<PositionType>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilePosition {
-    file: String,
-    line: i64,
-    column: i64,
+    pub file: String,
+    pub line: i64,
+    pub column: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PrimopMeta {
-    name: Option<String>,
-    args: Option<Vec<String>>,
-    experimental: Option<bool>,
-    arity: Option<i32>,
+    pub name: Option<String>,
+    pub args: Option<Vec<String>>,
+    pub experimental: Option<bool>,
+    pub arity: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

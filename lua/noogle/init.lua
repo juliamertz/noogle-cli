@@ -1,33 +1,5 @@
 local M = {}
 
----@diagnostic disable-next-line: undefined-global
-local nix_store_bin_path = nix_store_bin_path or nil
-
---
--- Utility functions
-
-function string:split(delimiter)
-	local result = {}
-	local from = 1
-	local delim_from, delim_to = string.find(self, delimiter, from)
-	while delim_from do
-		table.insert(result, string.sub(self, from, delim_from - 1))
-		from = delim_to + 1
-		delim_from, delim_to = string.find(self, delimiter, from)
-	end
-	table.insert(result, string.sub(self, from))
-	return result
-end
-
---- TODO: can we avoid having to check for both?
----
---- Check for decoded JSON nil value
---- @param val any
---- @return boolean
-local function is_nil(val)
-	return val == nil or val == vim.NIL
-end
-
 --- Get path on filesystem to executable in users PATH
 --- @return string?
 --- @param name string
@@ -39,6 +11,9 @@ local function which(name)
 		return nil
 	end
 end
+
+---@diagnostic disable-next-line: undefined-global
+local nix_store_bin_path = nix_store_bin_path or nil
 
 local function health()
 	local checks = {}
@@ -53,7 +28,7 @@ local function health()
 		if not path then
 			table.insert(checks, {
 				ok = false,
-				message = 'noogli not found in path',
+				message = 'noogle not found in path',
 			})
 		else
 			table.insert(checks, {
@@ -75,23 +50,6 @@ end
 -- if not we just fall back on whatever can be found in our PATH
 local bin_path = nix_store_bin_path or which 'noogle'
 
---- Extract markdown documentation string from lambda table
---- returns nil if the function doesn't have any doc-comments
---- @param func table
---- @return string?
-local function get_function_documentation(func)
-	if is_nil(func.content) or is_nil(func.content.content) then
-		return nil
-	end
-
-	local content = func.content.content
-	if type(content) == 'string' then
-		return content
-	end
-
-	return nil
-end
-
 function M.setup()
 	return {
 		command = 'Noogle',
@@ -99,15 +57,7 @@ function M.setup()
 			return vim.fn.systemlist(bin_path .. ' list')
 		end,
 		get_content = function(choice)
-			local raw = vim.fn.systemlist(bin_path .. ' show --json ' .. choice)
-			local json = vim.json.decode(table.concat(raw, '\n'))
-
-			local documentation = get_function_documentation(json)
-			if documentation == nil then
-				return { 'No documentation for this lambda' }
-			end
-
-			return documentation:split '\n'
+			return vim.fn.systemlist(bin_path .. ' doc ' .. choice)
 		end,
 		get_syntax_info = function()
 			return {

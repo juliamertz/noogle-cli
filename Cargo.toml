@@ -8,6 +8,7 @@ name = "noogle"
 path = "./src/main.rs"
 
 [dependencies]
+anyhow = "1.0.96"
 argh = "0.1.13"
 rust-fuzzy-search = "0.1.1" # already a dependency of argh
 serde = { version = "1.0.218", features = ["derive"] }

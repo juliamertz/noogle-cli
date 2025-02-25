@@ -1,9 +1,10 @@
 mod models;
-use models::Doc;
 
+use anyhow::{Context, Result};
 use argh::FromArgs;
+use models::Docs;
 use rust_fuzzy_search::fuzzy_compare;
-use std::io::{BufRead, Error, ErrorKind, Result, Write};
+use std::io::{BufRead, Write};
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Nix function exploring
@@ -18,6 +19,7 @@ enum Command {
     List(ListCommand),
     Search(SearchCommand),
     Show(ShowCommand),
+    Doc(DocCommand),
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -33,7 +35,7 @@ struct ListCommand {
 /// Fuzzy search function titles
 #[argh(subcommand, name = "search")]
 struct SearchCommand {
-    /// minimum match score for fuzzy matching 
+    /// minimum match score for fuzzy matching
     #[argh(option, short = 't')]
     threshold: Option<f32>,
 
@@ -55,23 +57,61 @@ struct ShowCommand {
     path: Option<String>,
 }
 
+#[derive(FromArgs, PartialEq, Debug)]
+/// Print markdown documentation for given function
+#[argh(subcommand, name = "doc")]
+struct DocCommand {
+    /// function path
+    #[argh(positional)]
+    path: Option<String>,
+}
+
 const RAW_JSON: &str = include_str!("../data.json");
 
 fn main() -> Result<()> {
     let cli: Cli = argh::from_env();
 
-    let data: Vec<Doc> = serde_json::from_str(RAW_JSON).unwrap();
+    let docs: Docs = serde_json::from_str(RAW_JSON).unwrap();
     let result = match &cli.command {
-        Command::List(args) => handle_list_command(args, data)?,
-        Command::Search(args) => handle_search_command(args, data),
-        Command::Show(args) => handle_show_command(args, &data)?,
+        Command::List(args) => handle_list_command(args, docs)?,
+        Command::Search(args) => handle_search_command(args, docs),
+        Command::Show(args) => handle_show_command(args, docs)?,
+        Command::Doc(args) => handle_doc_command(args, docs)?,
     };
 
-    std::io::stdout().write_all(result.as_bytes())
+    Ok(std::io::stdout().write_all(result.as_bytes())?)
 }
 
-fn handle_search_command(args: &SearchCommand, data: Vec<Doc>) -> String {
-    let mut matches = data
+/// If `string` is `None` read single line from stdin
+fn string_or_stdin(string: Option<String>) -> Result<String> {
+    match string {
+        Some(value) => Ok(value),
+        None => {
+            let stdin = std::io::stdin();
+            let mut handle = stdin.lock();
+            let mut buf = String::new();
+            handle.read_line(&mut buf)?;
+            Ok(buf.trim().to_string())
+        }
+    }
+}
+
+fn handle_list_command(args: &ListCommand, docs: Docs) -> Result<String> {
+    let stdout = if args.json {
+        serde_json::to_string_pretty(&docs)?
+    } else {
+        docs.0
+            .into_iter()
+            .map(|func| func.meta.title)
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    Ok(stdout)
+}
+
+fn handle_search_command(args: &SearchCommand, docs: Docs) -> String {
+    let mut matches = docs
         .iter()
         .filter_map(|entry| {
             let title = entry.meta.title.as_ref();
@@ -95,42 +135,23 @@ fn handle_search_command(args: &SearchCommand, data: Vec<Doc>) -> String {
     stdout
 }
 
-fn handle_show_command(args: &ShowCommand, data: &[Doc]) -> Result<String> {
-    let title = match args.path.to_owned() {
-        Some(value) => value,
-        None => {
-            let stdin = std::io::stdin();
-            let mut handle = stdin.lock();
-            let mut buf = String::new();
-            handle.read_line(&mut buf).unwrap();
-            buf.trim().to_string()
-        }
-    };
+fn handle_show_command(args: &ShowCommand, docs: Docs) -> Result<String> {
+    let title = string_or_stdin(args.path.clone())?;
+    let entry = docs.get_by_title(title).context("no such function")?;
 
-    match data.iter().find(|e| e.meta.title == title) {
-        Some(entry) => {
-            if args.json {
-                let serialized = serde_json::to_string_pretty(entry).unwrap();
-                return Ok(serialized);
-            }
-
-            // TODO: print formatted
-            Ok(format!("{:?}", entry))
-        }
-
-        None => Err(Error::new(ErrorKind::Other, "No such function found")),
+    if args.json {
+        Ok(serde_json::to_string_pretty(entry)?)
+    } else {
+        Ok(format!("{:?}", entry))
     }
 }
 
-fn handle_list_command(args: &ListCommand, data: Vec<Doc>) -> Result<String> {
-    let stdout = if args.json {
-        serde_json::to_string_pretty(&data)?
-    } else {
-        data.into_iter()
-            .map(|func| func.meta.title)
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
-    Ok(stdout)
+fn handle_doc_command(args: &DocCommand, docs: Docs) -> Result<String> {
+    let title = string_or_stdin(args.path.clone())?;
+    docs.get_by_title(title)
+        .context("no such function")?
+        .content
+        .clone()
+        .and_then(|source| source.content)
+        .context("function has no documentation")
 }
