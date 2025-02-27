@@ -1,28 +1,44 @@
-use std::ops::{Deref, DerefMut};
-
+use fuzzy_matcher::skim;
 use serde::{Deserialize, Serialize};
 
 pub type ValuePath = Vec<String>;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PositionType {
+    Lambda,
+    Attribute,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Docs(pub Vec<Doc>);
 
-impl Deref for Docs {
+impl std::ops::Deref for Docs {
     type Target = Vec<Doc>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for Docs {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 impl Docs {
     pub fn get_by_title(&self, title: impl AsRef<str>) -> Option<&Doc> {
         self.iter().find(|e| e.meta.title == title.as_ref())
+    }
+
+    pub fn fuzzy_search(&self, query: &str) -> Vec<(&Doc, i64)> {
+        let matcher = skim::SkimMatcherV2::default().ignore_case();
+        self.iter()
+            .filter_map(|item| {
+                matcher
+                    .fuzzy(&item.meta.title, query, false)
+                    .map(|(score, _)| (item, score))
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn fuzzy_search_sorted(&self, query: &str) -> Vec<(&Doc, i64)> {
+        let mut filtered = self.fuzzy_search(query);
+        filtered.sort_by(|(_, a), (_, b)| b.cmp(a));
+        filtered
     }
 }
 
@@ -36,12 +52,6 @@ pub struct Doc {
 pub struct ContentSource {
     pub content: Option<String>,
     pub source: Option<SourceOrigin>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PositionType {
-    Lambda,
-    Attribute,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

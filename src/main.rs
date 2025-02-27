@@ -1,95 +1,66 @@
 mod models;
 
 use anyhow::{Context, Result};
-use argh::FromArgs;
+use clap::{Parser, Subcommand};
 use models::Docs;
-use rust_fuzzy_search::fuzzy_compare;
 use std::io::{BufRead, Write};
 
-#[derive(FromArgs, PartialEq, Debug)]
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
 /// Nix function exploring
 struct Cli {
-    /// print out version and quit
-    #[argh(switch)]
-    version: bool,
-
-    #[argh(subcommand)]
-    command: Option<Command>,
+    #[command(subcommand)]
+    command: Command,
 }
 
-#[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand)]
+#[derive(Subcommand)]
 enum Command {
-    List(ListCommand),
-    Search(SearchCommand),
-    Show(ShowCommand),
-    Doc(DocCommand),
-}
+    /// Print out list of all functions
+    List {
+        /// print entries as serialized JSON to stdout
+        #[arg(short, long)]
+        json: bool,
+    },
 
-#[derive(FromArgs, PartialEq, Debug)]
-/// Print out list of all functions
-#[argh(subcommand, name = "list")]
-struct ListCommand {
-    /// print entries as serialized JSON to stdout
-    #[argh(switch)]
-    json: bool,
-}
+    /// Fuzzy search function titles
+    Search {
+        /// query string to match against function titles
+        query: String,
+    },
 
-#[derive(FromArgs, PartialEq, Debug)]
-/// Fuzzy search function titles
-#[argh(subcommand, name = "search")]
-struct SearchCommand {
-    /// minimum match score for fuzzy matching
-    #[argh(option, short = 't')]
-    threshold: Option<f32>,
+    /// Show function metadata
+    Show {
+        /// print entriy as serialized JSON to stdout
+        #[arg(short, long)]
+        json: bool,
 
-    /// query string to match against function titles
-    #[argh(positional)]
-    query: String,
-}
+        /// function path, if none is given it will read from stdin
+        path: Option<String>,
+    },
 
-#[derive(FromArgs, PartialEq, Debug)]
-/// Show function metadata
-#[argh(subcommand, name = "show")]
-struct ShowCommand {
-    /// print entry as serialized JSON to stdout
-    #[argh(switch)]
-    json: bool,
-
-    /// function path
-    #[argh(positional)]
-    path: Option<String>,
-}
-
-#[derive(FromArgs, PartialEq, Debug)]
-/// Print markdown documentation for given function
-#[argh(subcommand, name = "doc")]
-struct DocCommand {
-    /// function path
-    #[argh(positional)]
-    path: Option<String>,
+    /// Print markdown documentation for given function
+    Doc {
+        /// function path, if none is given it will read from stdin
+        path: Option<String>,
+    },
 }
 
 const RAW_JSON: &str = include_str!("../data.json");
 
 fn main() -> Result<()> {
-    let cli: Cli = argh::from_env();
-
-    if cli.version {
-        println!("v{}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
-    }
-
-    let Some(subcommand) = cli.command else {
-        anyhow::bail!("No subcommand given");
-    };
-
+    let cli = Cli::parse();
     let docs: Docs = serde_json::from_str(RAW_JSON).unwrap();
-    let result = match subcommand {
-        Command::List(args) => handle_list_command(args, docs)?,
-        Command::Search(args) => handle_search_command(args, docs),
-        Command::Show(args) => handle_show_command(args, docs)?,
-        Command::Doc(args) => handle_doc_command(args, docs)?,
+
+    let result = match cli.command {
+        Command::List { json } => handle_list_command(json, docs)?,
+        Command::Search {
+            query,
+        } => {
+
+            handle_search_command(&query, docs)
+        }
+        Command::Show { path, json } => handle_show_command(path, json, docs)?,
+        Command::Doc { path } => handle_doc_command(path, docs)?,
     };
 
     Ok(std::io::stdout().write_all(result.as_bytes())?)
@@ -109,8 +80,8 @@ fn string_or_stdin(string: Option<String>) -> Result<String> {
     }
 }
 
-fn handle_list_command(args: ListCommand, docs: Docs) -> Result<String> {
-    let stdout = if args.json {
+fn handle_list_command(json: bool, docs: Docs) -> Result<String> {
+    let stdout = if json {
         serde_json::to_string_pretty(&docs)?
     } else {
         docs.0
@@ -123,44 +94,30 @@ fn handle_list_command(args: ListCommand, docs: Docs) -> Result<String> {
     Ok(stdout)
 }
 
-fn handle_search_command(args: SearchCommand, docs: Docs) -> String {
-    let mut matches = docs
-        .iter()
-        .filter_map(|entry| {
-            let title = entry.meta.title.as_ref();
-            let score = fuzzy_compare(&args.query, title);
-            if score >= args.threshold.unwrap_or(0.3) {
-                Some((title, score))
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    matches.sort_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap());
-
+fn handle_search_command(query: &str, docs: Docs) -> String {
+    let results = docs.fuzzy_search_sorted(query);
     let mut stdout = String::new();
-    for (content, _) in matches {
-        stdout += content;
+    for (content, _) in results {
+        stdout += &content.meta.title;
         stdout += "\n";
     }
 
     stdout
 }
 
-fn handle_show_command(args: ShowCommand, docs: Docs) -> Result<String> {
-    let title = string_or_stdin(args.path)?;
+fn handle_show_command(path: Option<String>, json: bool, docs: Docs) -> Result<String> {
+    let title = string_or_stdin(path)?;
     let entry = docs.get_by_title(title).context("no such function")?;
 
-    if args.json {
+    if json {
         Ok(serde_json::to_string_pretty(entry)?)
     } else {
         Ok(format!("{:?}", entry))
     }
 }
 
-fn handle_doc_command(args: DocCommand, docs: Docs) -> Result<String> {
-    let title = string_or_stdin(args.path)?;
+fn handle_doc_command(path: Option<String>, docs: Docs) -> Result<String> {
+    let title = string_or_stdin(path)?;
     docs.get_by_title(title)
         .context("no such function")?
         .content
