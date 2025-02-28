@@ -35,7 +35,7 @@
         rec {
           default = noogle-cli;
 
-          noogle-nvim = pkgs.callPackage ./vimPlugin.nix { };
+          noogle-nvim = pkgs.callPackage ./vimPlugin.nix { inherit noogle-cli; };
           noogle-cli = craneLib.buildPackage (
             commonArgs
             // {
@@ -43,6 +43,8 @@
               postUnpack = ''
                 cp ${data-json} $sourceRoot/data.json
               '';
+
+              meta.mainProgram = "noogle";
             }
           );
         }
