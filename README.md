@@ -40,6 +40,10 @@ noogle search "optionalString" | head -n 1 | noogle show --json
 
 ### Neovim Plugin
 
+**using show documentation / goto definition**
+
+https://github.com/user-attachments/assets/4eb33ee6-8a3f-44c8-9ade-123e3517f8cf
+
 Make sure you have [godoc.nvim](https://github.com/fredrikaverpil/godoc.nvim) installed as this plugin only provides an adapter
 
 Add to your Neovim configuration (using your preferred plugin manager):
