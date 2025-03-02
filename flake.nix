@@ -2,7 +2,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     crane.url = "github:ipetkov/crane";
-    noogle.url = "github:nix-community/noogle";
+    # noogle.url = "github:nix-community/noogle";
   };
 
   outputs =
@@ -10,7 +10,6 @@
       self,
       nixpkgs,
       crane,
-      noogle,
     }:
     let
       forEachSystem =
@@ -30,7 +29,8 @@
             buildInputs = [ ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
           };
 
-          data-json = noogle.packages.${pkgs.system}.data-json;
+          # data-json = noogle.packages.${pkgs.system}.data-json;
+          data-json = ./data.json;
         in
         rec {
           default = noogle-cli;
