@@ -68,13 +68,21 @@ function M.setup()
 		get_syntax_info = function()
 			return { filetype = 'markdown', language = 'markdown' }
 		end,
-		get_definition = function(choice)
+		goto_definition = function(choice)
 			local json = get_function_data(choice)
 			if not json then
 				vim.notify('No data found for ' .. choice)
 				return
 			end
-			return extract_definition(json)
+
+			local definition = extract_definition(json)
+			if not definition then
+				vim.notify('No definition found for: ' .. item, vim.log.levels.WARN)
+				return
+			end
+
+			vim.cmd('silent! e ' .. vim.fn.fnameescape(definition.filepath))
+			vim.api.nvim_win_set_cursor(0, definition.position)
 		end,
 	}
 end
