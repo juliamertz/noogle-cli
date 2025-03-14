@@ -1,8 +1,15 @@
 {
   inputs = {
+    # source of documentation, override this input to regenerate docs with updates
+    nixpkgs-master.url = "nixpkgs/master";
+
+    # build dependencies
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     crane.url = "github:ipetkov/crane";
-    noogle.url = "github:nix-community/noogle";
+    noogle = {
+      url = "github:juliamertz/noogle"; # fork with darwin support
+      inputs.nixpkgs-master.follows = "nixpkgs-master";
+    };
   };
 
   outputs =
@@ -11,6 +18,7 @@
       nixpkgs,
       crane,
       noogle,
+      ...
     }:
     let
       forEachSystem =
