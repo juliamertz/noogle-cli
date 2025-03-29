@@ -1,5 +1,3 @@
-local M = {}
-
 local function cmd_with_output(cmd)
 	local output = vim.fn.system(cmd)
 	if vim.v.shell_error == 0 then
@@ -55,6 +53,8 @@ local function extract_definition(json)
 	}
 end
 
+local M = {}
+
 function M.setup()
 	return {
 		command = 'Noogle',
@@ -77,7 +77,7 @@ function M.setup()
 
 			local definition = extract_definition(json)
 			if not definition then
-				vim.notify('No definition found for: ' .. item, vim.log.levels.WARN)
+				vim.notify('No definition found for: ' .. choice, vim.log.levels.WARN)
 				return
 			end
 

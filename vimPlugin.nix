@@ -15,7 +15,8 @@ let
     '';
 in
 vimUtils.buildVimPlugin {
-  name = "noogle-nvim";
+  pname = "noogle.nvim";
+  version = "0.1.0";
   src = stdenv.mkDerivation {
     name = "noogle-nvim-source";
     src = initLua;

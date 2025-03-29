@@ -53,12 +53,7 @@ fn main() -> Result<()> {
 
     let result = match cli.command {
         Command::List { json } => handle_list_command(json, docs)?,
-        Command::Search {
-            query,
-        } => {
-
-            handle_search_command(&query, docs)
-        }
+        Command::Search { query } => handle_search_command(&query, docs),
         Command::Show { path, json } => handle_show_command(path, json, docs)?,
         Command::Doc { path } => handle_doc_command(path, docs)?,
     };

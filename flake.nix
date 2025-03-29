@@ -6,6 +6,10 @@
     # build dependencies
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     crane.url = "github:ipetkov/crane";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     noogle = {
       url = "github:juliamertz/noogle"; # fork with darwin support
       inputs.nixpkgs-master.follows = "nixpkgs-master";
@@ -16,38 +20,40 @@
     {
       self,
       nixpkgs,
-      crane,
       noogle,
+      crane,
+      flake-utils,
+      rust-overlay,
       ...
     }:
-    let
-      forEachSystem =
-        f:
-        nixpkgs.lib.genAttrs (nixpkgs.lib.systems.flakeExposed) (
-          system: f nixpkgs.legacyPackages.${system}
-        );
-    in
-    {
-      packages = forEachSystem (
-        pkgs:
-        let
-          craneLib = crane.mkLib pkgs;
-          commonArgs = {
-            src = craneLib.cleanCargoSource ./.;
-            strictDeps = true;
-            buildInputs = [ ] ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
-          };
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ (import rust-overlay) ];
+        };
 
-          data-json = noogle.packages.${pkgs.system}.data-json;
-        in
-        rec {
+        craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.nightly.latest.default);
+        craneArgs = {
+          src = craneLib.cleanCargoSource ./.;
+          strictDeps = true;
+        };
+
+        data-json = noogle.packages.${pkgs.system}.data-json;
+      in
+      {
+        checks = {
+          inherit (self.packages.${system}) noogle-cli;
+        };
+
+        packages = rec {
           default = noogle-cli;
-
           noogle-nvim = pkgs.callPackage ./vimPlugin.nix { inherit noogle-cli; };
           noogle-cli = craneLib.buildPackage (
-            commonArgs
+            craneArgs
             // {
-              cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+              cargoArtifacts = craneLib.buildDepsOnly craneArgs;
               postUnpack = ''
                 cp ${data-json} $sourceRoot/data.json
               '';
@@ -55,20 +61,14 @@
               meta.mainProgram = "noogle";
             }
           );
-        }
-      );
+        };
 
-      checks = forEachSystem (pkgs: {
-        inherit (self.packages.${pkgs.system}) default;
-      });
-
-      devShells = forEachSystem (pkgs: {
-        default = (crane.mkLib pkgs).devShell {
-          checks = self.checks.${pkgs.system};
+        devShells.default = craneLib.devShell {
+          checks = self.checks.${system};
           packages = [ ];
         };
-      });
-    };
+      }
+    );
 
   nixConfig = {
     extra-substituters = [ "https://juliamertz.cachix.org" ];
