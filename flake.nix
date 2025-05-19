@@ -5,14 +5,16 @@
 
     # build dependencies
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    systems.url = "github:nix-systems/default";
     crane.url = "github:ipetkov/crane";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     noogle = {
-      url = "github:juliamertz/noogle"; # fork with darwin support
+      url = "github:nix-community/noogle";
       inputs.nixpkgs-master.follows = "nixpkgs-master";
+      inputs.systems.follows = "systems";
     };
   };
 

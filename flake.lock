@@ -347,19 +347,21 @@
           "nixpkgs-master"
         ],
         "pre-commit-hooks": "pre-commit-hooks",
-        "systems": "systems_3",
+        "systems": [
+          "systems"
+        ],
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1741916066,
-        "narHash": "sha256-sTvPwsFLTpREWY2fyPOqY8Klw9HtYXyVIyU1q6EhJhs=",
-        "owner": "juliamertz",
+        "lastModified": 1747622892,
+        "narHash": "sha256-k9cbwmJOzMK693w5CImaOtBS97YMHA4SvUldXSsiB4M=",
+        "owner": "nix-community",
         "repo": "noogle",
-        "rev": "e7feb47f925ca405090e3e3173f0e111f278cbc7",
+        "rev": "be0b702d2152c765645e9ce2c8cf4e9792641915",
         "type": "github"
       },
       "original": {
-        "owner": "juliamertz",
+        "owner": "nix-community",
         "repo": "noogle",
         "type": "github"
       }
@@ -396,7 +398,8 @@
         "nixpkgs": "nixpkgs",
         "nixpkgs-master": "nixpkgs-master",
         "noogle": "noogle",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay",
+        "systems": "systems_3"
       }
     },
     "rust-overlay": {
