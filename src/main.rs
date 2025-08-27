@@ -2,8 +2,14 @@ mod models;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use models::Docs;
+use models::{ArchivedDocs, Docs};
 use std::io::{BufRead, Write};
+
+impl From<&ArchivedDocs> for Docs {
+    fn from(val: &ArchivedDocs) -> Self {
+        rkyv::deserialize::<Docs, rkyv::rancor::Error>(val).unwrap()
+    }
+}
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -30,7 +36,7 @@ enum Command {
 
     /// Show function metadata
     Show {
-        /// print entriy as serialized JSON to stdout
+        /// print entry as serialized JSON to stdout
         #[arg(short, long)]
         json: bool,
 
@@ -45,11 +51,11 @@ enum Command {
     },
 }
 
-const RAW_JSON: &str = include_str!("../data.json");
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let docs: Docs = serde_json::from_str(RAW_JSON).unwrap();
+
+    let bytes = include_bytes!("../data");
+    let docs = unsafe { rkyv::access_unchecked::<ArchivedDocs>(&bytes[..]) };
 
     let result = match cli.command {
         Command::List { json } => handle_list_command(json, docs)?,
@@ -75,13 +81,15 @@ fn string_or_stdin(string: Option<String>) -> Result<String> {
     }
 }
 
-fn handle_list_command(json: bool, docs: Docs) -> Result<String> {
+fn handle_list_command(json: bool, archive: &ArchivedDocs) -> Result<String> {
     let stdout = if json {
+        let docs: Docs = archive.into();
         serde_json::to_string_pretty(&docs)?
     } else {
-        docs.0
-            .into_iter()
-            .map(|func| func.meta.title)
+        archive
+            .0
+            .iter()
+            .map(|doc| doc.meta.title.as_str())
             .collect::<Vec<_>>()
             .join("\n")
     };
@@ -89,7 +97,8 @@ fn handle_list_command(json: bool, docs: Docs) -> Result<String> {
     Ok(stdout)
 }
 
-fn handle_search_command(query: &str, docs: Docs) -> String {
+fn handle_search_command(query: &str, archive: impl Into<Docs>) -> String {
+    let docs = archive.into();
     let results = docs.fuzzy_search_sorted(query);
     let mut stdout = String::new();
     for (content, _) in results {
@@ -100,7 +109,12 @@ fn handle_search_command(query: &str, docs: Docs) -> String {
     stdout
 }
 
-fn handle_show_command(path: Option<String>, json: bool, docs: Docs) -> Result<String> {
+fn handle_show_command(
+    path: Option<String>,
+    json: bool,
+    archive: impl Into<Docs>,
+) -> Result<String> {
+    let docs = archive.into();
     let title = string_or_stdin(path)?;
     let entry = docs.get_by_title(title).context("no such function")?;
 
@@ -111,7 +125,8 @@ fn handle_show_command(path: Option<String>, json: bool, docs: Docs) -> Result<S
     }
 }
 
-fn handle_doc_command(path: Option<String>, docs: Docs) -> Result<String> {
+fn handle_doc_command(path: Option<String>, archive: impl Into<Docs>) -> Result<String> {
+    let docs = archive.into();
     let title = string_or_stdin(path)?;
     docs.get_by_title(title)
         .context("no such function")?

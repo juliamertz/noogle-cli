@@ -1,3 +1,5 @@
 /target
 /result
 data.json
+.direnv
+data
