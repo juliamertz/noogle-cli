@@ -7,6 +7,9 @@ A command-line interface for searching [Noogle](https://noogle.dev/)
 - **Fuzzy finding** through Noogle's dataset
 - **Neovim integration** via included plugin
 
+> [!TIP]
+> override the `nixpkgs-master` input to rebuild against the latest nixpkgs each time you update
+
 ## Build
 
 ### CLI Tool
